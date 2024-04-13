@@ -1,58 +1,21 @@
 const { ChatOpenAI } = require("@langchain/openai");
-const { ConversationSummaryBufferMemory } = require("langchain/memory");
-const { ConversationChain } = require("langchain/chains");
-const {
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    MessagesPlaceholder,
-    SystemMessagePromptTemplate,
-} = require("@langchain/core/prompts");
 const { system_prompt } = require("../utils/prompts");
 const { HumanMessage } = require("@langchain/core/messages");
 const axios = require("axios");
+const { createClient } = require('@deepgram/sdk');
+const { openAI } = require("../utils/helper");
 
 
 const chat = async (req, res) => {
     const request = req.body;
     try {
-        const chatPromptMemory = new ConversationSummaryBufferMemory({
-            llm: new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 }),
-            maxTokenLimit: 10,
-            returnMessages: true,
-        });
-
-        if (request.chat_history && request.chat_history.length > 0) {
-            for (const chatItem of request.chat_history) {
-                await chatPromptMemory.saveContext(
-                    { input: chatItem.input },
-                    { output: chatItem.output }
-                );
-            }
-        }
-
-        const chatPrompt = ChatPromptTemplate.fromMessages([
-            SystemMessagePromptTemplate.fromTemplate(
-                system_prompt
-            ),
-            new MessagesPlaceholder("history"),
-            HumanMessagePromptTemplate.fromTemplate("{input}"),
-        ]);
-
-        const model = new ChatOpenAI({ temperature: 0.9, verbose: true });
-        const chain = new ConversationChain({
-            llm: model,
-            memory: chatPromptMemory,
-            prompt: chatPrompt,
-        });
-
-        const response = await chain.invoke({ input: request.input });
+        const response = await openAI(request)
         res.status(200).json(response);
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
     }
 }
-
 
 const chatCompletions = async (req, res) => {
     try {
@@ -110,8 +73,41 @@ const textToSpeech = async (req, res) => {
     }
 }
 
+const speechToText = async (req, res) => {
+    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+
+    try {
+        const audioFile = req.file;
+        if (!audioFile) {
+            res.status(400).json({ error: 'No audio file uploaded' });
+            return;
+        }
+
+        const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+            audioFile.buffer,
+            {
+                model: "nova-2",
+                smart_format: true,
+            }
+        );
+
+        if (error) {
+            console.log(error);
+            res.status(500).json({ error: error.message });
+        } else {
+            const { response } = await openAI({ input: result.results.channels[0].alternatives[0].transcript })
+            res.status(200).json({ response: response });
+        }
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
 module.exports = {
     chat,
     chatCompletions,
-    textToSpeech
+    textToSpeech,
+    speechToText
 }
