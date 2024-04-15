@@ -45,31 +45,18 @@ const chatCompletions = async (req, res) => {
 }
 
 const textToSpeech = async (req, res) => {
-    const inputText = req.body.text;
+    const { text, model } = req.body;
+    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     try {
-        const API_KEY = process.env.ELEVEN_LABS_API_KEY;
-        const VOICE_ID = process.env.VOICE_ID;
-
-        const options = {
-            method: 'POST',
-            url: `${process.env.ELEVEN_LABS_API}/v1/text-to-speech/${VOICE_ID}`,
-            headers: {
-                accept: 'audio/mpeg',
-                'content-type': 'application/json',
-                'xi-api-key': `${API_KEY}`,
-            },
-            data: {
-                text: inputText,
-            },
-            responseType: 'arraybuffer',
-        };
-
-        const speechDetails = await axios.request(options);
-        res.setHeader('Content-Type', 'audio/mpeg');
-        res.status(200).send(speechDetails.data);
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+        const response = await deepgram.speak.request({ text }, { model });
+        const stream = await response.getStream();
+        for await (const chunk of stream) {
+            res.write(chunk);
+        }
+        res.end();
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Internal Server Error");
     }
 }
 
@@ -96,12 +83,7 @@ const speechToText = async (req, res) => {
             res.status(500).json({ error: error.message });
         } else {
             const { response } = await openAI({ input: result.results.channels[0].alternatives[0].transcript })
-            const audioStream = await deepgram.speak.request({ text: response }, { model: "aura-asteria-en" });
-            const stream = await audioStream.getStream();
-            for await (const chunk of stream) {
-                res.write(chunk);
-            }
-            res.end();
+            res.status(200).json({ response: response });
         }
 
     } catch (error) {
@@ -109,27 +91,9 @@ const speechToText = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 }
-
-const TextToSpeech = async (req, res) => {
-    const { text, model } = req.body;
-    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-    try {
-        const response = await deepgram.speak.request({ text }, { model });
-        const stream = await response.getStream();
-        for await (const chunk of stream) {
-            res.write(chunk);
-        }
-        res.end();
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Internal Server Error");
-    }
-}
-
 module.exports = {
     chat,
     chatCompletions,
     textToSpeech,
     speechToText,
-    TextToSpeech
 }
