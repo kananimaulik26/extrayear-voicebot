@@ -65,6 +65,7 @@ const speechToText = async (req, res) => {
 
     try {
         const audioFile = req.file;
+        const chat_history = req.body.chat_history;
         if (!audioFile) {
             res.status(400).json({ error: 'No audio file uploaded' });
             return;
@@ -82,8 +83,15 @@ const speechToText = async (req, res) => {
             console.log(error);
             res.status(500).json({ error: error.message });
         } else {
-            const { response } = await openAI({ input: result.results.channels[0].alternatives[0].transcript })
-            res.status(200).json({ response: response });
+            const input = result.results.channels[0].alternatives[0].transcript
+            const { response } = await openAI({ input: input, chat_history: JSON.parse(chat_history) })
+            res.status(200).json({
+                response: {
+                    input,
+                    output: response
+
+                }
+            });
         }
 
     } catch (error) {
