@@ -110,9 +110,26 @@ const speechToText = async (req, res) => {
     }
 }
 
+const TextToSpeech = async (req, res) => {
+    const { text, model } = req.body;
+    const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+    try {
+        const response = await deepgram.speak.request({ text }, { model });
+        const stream = await response.getStream();
+        for await (const chunk of stream) {
+            res.write(chunk);
+        }
+        res.end();
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Internal Server Error");
+    }
+}
+
 module.exports = {
     chat,
     chatCompletions,
     textToSpeech,
-    speechToText
+    speechToText,
+    TextToSpeech
 }
