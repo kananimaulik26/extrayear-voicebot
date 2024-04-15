@@ -96,7 +96,12 @@ const speechToText = async (req, res) => {
             res.status(500).json({ error: error.message });
         } else {
             const { response } = await openAI({ input: result.results.channels[0].alternatives[0].transcript })
-            res.status(200).json({ response: response });
+            const audioStream = await deepgram.speak.request({ text: response }, { model: "aura-asteria-en" });
+            const stream = await audioStream.getStream();
+            for await (const chunk of stream) {
+                res.write(chunk);
+            }
+            res.end();
         }
 
     } catch (error) {
